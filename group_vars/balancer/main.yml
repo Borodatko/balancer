@@ -1,0 +1,12 @@
+---
+
+vrrp_interface: "enp0s3"
+vrrp_pass: "CHANGEME"
+vrrp_addr: "CHANGEME"
+lb_ip01: "CHANGEME"
+lb_ip02: "CHANGEME"
+srv01: "CHANGEME"
+srv02: "CHANGEME"
+srv01_ip: "CHANGEME"
+srv02_ip: "CHANGEME"
+tls: "TLSv1.3"

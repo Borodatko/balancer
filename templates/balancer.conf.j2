@@ -1,0 +1,95 @@
+upstream backend_{{ srv01 }} {
+    server {{ lb_ip01 }}:8008;
+    server {{ lb_ip02 }}:8008;
+}
+
+upstream backend_{{ srv02 }} {
+    server {{ lb_ip01 }}:8009;
+    server {{ lb_ip02 }}:8009;
+}
+
+server {
+    listen 80;
+    server_name {{ srv01 }};
+    server_tokens off;
+
+    error_log  /var/log/nginx/balancer_{{ srv01 }}.error.log;
+    access_log /var/log/nginx/balancer_{{ srv01 }}.access.log;
+
+    location / {
+        rewrite ^(.*)$ https://{{ srv01 }}$1 permanent;
+    }
+
+    location = /favicon.ico {
+        log_not_found off;
+        access_log off;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name {{ srv01 }};
+    server_tokens off;
+
+    ssl_certificate {{ ssl_path }}/first.crt;
+    ssl_certificate_key {{ ssl_path }}/first.key;
+    ssl_protocols {{ tls }};
+    ssl_ciphers "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA:ECDHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4";
+
+    error_log  /var/log/nginx/ssl_balancer_{{ srv01 }}.error.log;
+    access_log /var/log/nginx/ssl_balancer_{{ srv01 }}.access.log;
+
+    location / {
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://backend_{{ srv01 }};
+    }
+
+    location = /favicon.ico {
+        log_not_found off;
+        access_log off;
+    }
+}
+
+server {
+    listen 80;
+    server_name {{ srv02 }};
+    server_tokens off;
+
+    error_log  /var/log/nginx/balancer_{{ srv02 }}.error.log;
+    access_log /var/log/nginx/balancer_{{ srv02 }}.access.log;
+
+    location / {
+        rewrite ^(.*)$ https://{{ srv02 }}$1 permanent;
+    }
+
+    location = /favicon.ico {
+        log_not_found off;
+        access_log off;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name {{ srv02 }};
+    server_tokens off;
+
+    ssl_certificate {{ ssl_path }}/second.crt;
+    ssl_certificate_key {{ ssl_path }}/second.key;
+    ssl_protocols {{ tls }};
+    ssl_ciphers "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA:ECDHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA256:DHE-RSA-AES128-SHA256:DHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:ECDHE-RSA-DES-CBC3-SHA:EDH-RSA-DES-CBC3-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA256:AES128-SHA256:AES256-SHA:AES128-SHA:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4";
+
+    error_log  /var/log/nginx/ssl_balancer_{{ srv02 }}.error.log;
+    access_log /var/log/nginx/ssl_balancer_{{ srv02 }}.access.log;
+
+    location / {
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_pass http://backend_{{ srv02 }};
+    }
+
+    location = /favicon.ico {
+        log_not_found off;
+        access_log off;
+    }
+}

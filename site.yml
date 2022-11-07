@@ -1,0 +1,176 @@
+---
+
+- name: Check OS
+  assert:
+    that:
+    - ansible_facts['os_family'] == "RedHat"
+    - ansible_facts['distribution_major_version'] == "8"
+    fail_msg: Host {{ ansible_hostname }} does not meet minimal reqs
+
+- name: Preparing hosts
+  hosts: all
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.9
+  tags:
+    - preinstall
+  tasks:
+
+  - name: Set timezone
+    become: true
+    community.general.timezone:
+      name: Europe/Moscow
+  
+  - name: Edit /etc/profile
+    become: true
+    blockinfile:
+      path: /etc/profile
+      block: |
+        shopt -s histappend
+        export HISTSIZE=10000
+        export HISTTIMEFORMAT="%h %d %H:%M:%S "
+        PROMPT_COMMAND='history -a'
+        export HISTIGNORE="ls:ll:history:w:htop:pwd"
+
+  - name: Update repository && upgrade packages
+    become: true
+    ansible.builtin.dnf:
+      name: "*"
+      state: latest
+
+  - name: Install packages
+    become: true
+    ansible.builtin.dnf:
+      name:
+        - nano
+        - sysstat
+        - mlocate
+        - net-tools
+        - bind-utils
+        - tcpdump
+        - curl
+        - wget
+      state: latest
+
+  - name: Rename Hostnames
+    become: true
+    ansible.builtin.hostname:
+      name: "{{ inventory_hostname }}"
+
+  - name: Add Nginx Repo
+    become: true
+    ansible.builtin.template:
+      src: nginx-stable.repo.j2
+      dest: /etc/yum.repos.d/nginx-stable.repo
+      mode: '644'
+
+  - name: Install Nginx
+    become: true
+    ansible.builtin.dnf:
+      name:
+        - nginx
+      state: latest
+
+
+- name: Keepalived Installation
+  hosts: balancer
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.9
+  tags:
+    - keepalived
+  tasks:
+
+  - name: Install Install Keepalived
+    become: true
+    ansible.builtin.dnf:
+      name:
+        - keepalived
+      state: latest
+
+  - name: Keepalived - Deploy keepalived Master config
+    become: true
+    ansible.builtin.template: 
+      src: keepalived_master.conf.j2
+      dest: /etc/keepalived/keepalived.conf
+    when:
+      inventory_hostname == "lb01"
+
+  - name: Keepalived - Deploy keepalived Slave config
+    become: true
+    ansible.builtin.template:
+      src: keepalived_slave.conf.j2
+      dest: /etc/keepalived/keepalived.conf
+    when:
+      inventory_hostname == "lb02"
+
+  - name: Keepalived - Update sysctl.conf
+    become: true
+    ansible.builtin.blockinfile:
+      path: /etc/sysctl.conf
+      block: |
+        net.ipv4.ip_forward = 1
+        net.ipv4.ip_nonlocal_bind = 1
+
+  - name: Keepalived - Reload sysctl
+    become: true
+    ansible.posix.sysctl:
+      name: "{{ item }}"
+      value: 1
+      reload: yes
+    with_items:
+      - net.ipv4.ip_forward
+      - net.ipv4.ip_nonlocal_bind
+
+  - name: Keepalived - Create Keepalived user
+    become: true
+    ansible.builtin.user:
+      name: keepalived_script
+      shell: /bin/nologin
+
+  - name: Keepalived - Enable Keepalived
+    become: true
+    ansible.builtin.systemd:
+      name: keepalived
+      enabled: yes
+      state: started
+
+
+- name: Nginx Configuration
+  hosts: balancer
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.9
+  tags:
+    - nginx
+    - ssl
+  tasks:
+
+  - name: Create {{ srv01 }} cert
+    become: true
+    openssl_certificate:
+      path: "{{ ssl_path }}/first.crt"
+      privatekey_path: "{{ ssl_path }}/first.key"
+      csr_path: "{{ ssl_path }}/ca-bundle.trust.crt"
+      provider: selfsigned
+
+  - name: Create {{ srv02 }} cert
+    become: true
+    openssl_certificate:
+      path: "{{ ssl_path }}/second.crt"
+      privatekey_path: "{{ ssl_path }}/second.key"
+      csr_path: "{{ ssl_path }}/ca-bundle.trust.crt"
+      provider: selfsigned
+
+  - name: Copy nginx configs
+    become: true
+    ansible.builtin.templates:
+      src: "{{ item }}"
+      dest: /etc/nginx/conf.d/
+    with_items:
+      - balancer.conf.j2
+      - default.conf.j2
+
+  - name: Start Nginx
+    become: true
+    ansible.buitlin.systemd:
+      name: nginx
+      enabled: true
+      state: started

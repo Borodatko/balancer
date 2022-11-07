@@ -1,0 +1,27 @@
+global_defs {
+    enable_script_security
+    script_user keepalived_script
+}
+
+vrrp_script chk_nginx {
+    script "/usr/sbin/pidof nginx"
+    interval 2
+}
+
+vrrp_instance V_1 {
+    state MASTER
+    interface {{ vrrp_interface }}
+    virtual_router_id 41
+    priority 100
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass {{ vrrp_pass }}
+    }
+    virtual_ipaddress {
+        {{ vrrp_addr }}
+    }
+    track_script {
+        chk_nginx
+    }
+}
