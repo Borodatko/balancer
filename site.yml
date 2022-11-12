@@ -1,12 +1,5 @@
 ---
 
-- name: Check OS
-  assert:
-    that:
-    - ansible_facts['os_family'] == "RedHat"
-    - ansible_facts['distribution_major_version'] == "8"
-    fail_msg: Host {{ ansible_hostname }} does not meet minimal reqs
-
 - name: Preparing hosts
   hosts: all
   vars:
@@ -14,6 +7,13 @@
   tags:
     - preinstall
   tasks:
+
+  - name: Check OS
+    ansible.builtin.assert:
+      that:
+        - ansible_facts['os_family'] == "RedHat"
+        - ansible_facts['distribution_major_version'] == "8"
+      fail_msg: Host {{ ansible_hostname }} does not meet minimal reqs
 
   - name: Set timezone
     become: true
@@ -86,7 +86,7 @@
         - keepalived
       state: latest
 
-  - name: Keepalived - Deploy keepalived Master config
+  - name: Copy keepalived Master config
     become: true
     ansible.builtin.template: 
       src: keepalived_master.conf.j2
@@ -94,7 +94,7 @@
     when:
       inventory_hostname == "lb01"
 
-  - name: Keepalived - Deploy keepalived Slave config
+  - name: Copy keepalived Slave config
     become: true
     ansible.builtin.template:
       src: keepalived_slave.conf.j2
@@ -134,43 +134,66 @@
       state: started
 
 
-- name: Nginx Configuration
+- name: SSL configuration
   hosts: balancer
   vars:
     ansible_python_interpreter: /usr/bin/python3.9
   tags:
-    - nginx
     - ssl
   tasks:
 
+  - name: Install cryptography
+    become: true
+    ansible.builtin.pip:
+      name: cryptography
+      state: present
+      executable: pip3
+
+  - name: Create {{ srv01 }} private key
+    become: true
+    community.crypto.openssl_privatekey:
+      path: "{{ ssl_path }}/first.key"
+
+  - name: Create {{ srv02 }} private key
+    become: true
+    community.crypto.openssl_privatekey:
+      path: "{{ ssl_path }}/second.key"
+
   - name: Create {{ srv01 }} cert
     become: true
-    openssl_certificate:
+    community.crypto.x509_certificate:
       path: "{{ ssl_path }}/first.crt"
       privatekey_path: "{{ ssl_path }}/first.key"
-      csr_path: "{{ ssl_path }}/ca-bundle.trust.crt"
       provider: selfsigned
 
   - name: Create {{ srv02 }} cert
     become: true
-    openssl_certificate:
+    community.crypto.x509_certificate:
       path: "{{ ssl_path }}/second.crt"
       privatekey_path: "{{ ssl_path }}/second.key"
-      csr_path: "{{ ssl_path }}/ca-bundle.trust.crt"
       provider: selfsigned
 
   - name: Copy nginx configs
     become: true
-    ansible.builtin.templates:
+    ansible.builtin.template:
       src: "{{ item }}"
-      dest: /etc/nginx/conf.d/
+      dest: /etc/nginx/conf.d/{{ item | basename | regex_replace('\.j2$', '') }}
     with_items:
       - balancer.conf.j2
       - default.conf.j2
 
+
+- name: Start Nginx
+  hosts: all
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.9
+  tags:
+    - nginx
+  tasks:
+
   - name: Start Nginx
     become: true
-    ansible.buitlin.systemd:
+    ansible.builtin.systemd:
       name: nginx
       enabled: true
       state: started

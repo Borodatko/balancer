@@ -1,12 +1,13 @@
-Nginx Balancer
-==============
+Nginx Balancer Playbook
+=======================
 
-This ansible playbook install and configure load balancer, which consists of two nodes and two web servers.
+This playbook set up and run load balancing test bench for two web servers.
 
 
 Dependencies
 ------------
 
+ - 4 VMs: 2 - webservers, 2 - LB;
  - RHEL family OS, version 8;
  - Python version 3.9.
 
@@ -38,4 +39,4 @@ BSD-3-Clause
 Author Information
 ------------------
 
-Borodatko
+https://github.com/Borodatko
