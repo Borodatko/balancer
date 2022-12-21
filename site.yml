@@ -196,13 +196,31 @@
     - nginx
   tasks:
 
+- name: Start Nginx
+  hosts: all
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.9
+  tags:
+    - nginx
+  tasks:
+
   - name: Start Nginx
     become: true
     ansible.builtin.systemd:
       name: nginx
       enabled: true
       state: started
-    notify: Start Keepalived
 
-  - name: Flush handlers
-    meta: flush_handlers
+- name: Start Keepalived
+  hosts: balancer
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.9
+  tags:
+    - keepalived-systemd
+  tasks:
+
+  - name: Start Keepalived
+    become: true
+    ansible.builtin.systemd:
+      name: keepalived
+      state: started
